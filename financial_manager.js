@@ -138,10 +138,8 @@ class FinancialManager {
     }
 
     formatNumber(val) {
-        if (Math.abs(val) > 1000000) {
-            return (val / 1000000).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-        }
-        return val.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+        // ALWAYS display in Millions with 2 decimal places
+        return (val / 1000000).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     }
 }
 

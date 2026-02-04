@@ -13,6 +13,8 @@ class PersonnelManager {
 
         // Calculate Summary
         const totalHeadcount = this.state.reduce((sum, item) => sum + (parseFloat(item.count) || 0), 0);
+        const welfarePercent = parseFloat(window.inputApps.currentInputs.personnelWelfarePercent) || 0;
+        const totalCostYear1 = this.calculateYear1Total(); // Now includes welfare %
 
         // Group by Category
         const groups = {};
@@ -81,18 +83,34 @@ class PersonnelManager {
 
         this.container.innerHTML = `
             <div class="dashboard-container">
-                <div class="action-bar-top" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
-                    <div>
-                        <h2 class="result-title" style="margin:0;">Personnel Plan</h2>
-                        <span style="font-size:13px; color:#666;">Total Headcount: <strong style="color:#107c41; font-size:16px;">${totalHeadcount}</strong> Persons</span>
+                <div class="action-bar-top" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; background:white; padding:15px; border-radius:8px; box-shadow:0 2px 4px rgba(0,0,0,0.05);">
+                    <div style="display:flex; flex-direction:column; gap:8px;">
+                        <div>
+                             <span style="font-size:13px; color:#666; margin-right:10px;">Total Headcount:</span>
+                             <strong style="color:#333; font-size:14px;">${totalHeadcount}</strong>
+                        </div>
+                        <div style="display:flex; align-items:center; gap:8px;">
+                             <span style="font-size:13px; color:#666;">Annual Cost (Y1):</span>
+                             <strong style="color:#d13438; font-size:18px;" id="personnel-total-y1">${totalCostYear1.toLocaleString('en-US', { maximumFractionDigits: 0 })}</strong>
+                             <span style="font-size:12px; color:#888;">THB</span>
+                        </div>
                     </div>
-                    <div style="display:flex; gap:10px;">
-                        <button class="btn btn-primary" onclick="personnelApp.add()">
-                            <i class="fa-solid fa-plus"></i> Add
-                        </button>
-                        <button class="btn btn-secondary" onclick="inputApps.userTriggerCalculate(); app.navigateTo('financials')">
-                            <i class="fa-solid fa-calculator"></i> Calculate
-                        </button>
+
+                    <div style="display:flex; flex-direction:column; align-items:flex-end; gap:5px;">
+                         <div style="display:flex; align-items:center; gap:5px;">
+                            <label style="font-size:12px; color:#666;">Welfare/Overhead (%):</label>
+                            <input type="number" class="input-compact" style="width:60px; text-align:center; font-weight:bold;" 
+                                   value="${welfarePercent}" step="1" onchange="personnelApp.updateWelfarePercent(this.value)">
+                            <span style="font-size:12px; color:#666;">%</span>
+                         </div>
+                         <div style="display:flex; gap:10px; margin-top:5px;">
+                            <button class="btn btn-primary" onclick="personnelApp.add()">
+                                <i class="fa-solid fa-plus"></i> Add
+                            </button>
+                            <button class="btn btn-secondary" onclick="inputApps.userTriggerCalculate(); app.navigateTo('financials')">
+                                <i class="fa-solid fa-calculator"></i> Calculate
+                            </button>
+                        </div>
                     </div>
                 </div>
 
@@ -104,7 +122,6 @@ class PersonnelManager {
             
             <div style="height: 100px;"></div>
         `;
-        this.updateSummary();
     }
 
     add() {
@@ -129,6 +146,11 @@ class PersonnelManager {
         this.updateSummary();
     }
 
+    updateWelfarePercent(value) {
+        window.inputApps.currentInputs.personnelWelfarePercent = parseFloat(value) || 0;
+        this.render(); // Re-render to update total
+    }
+
     updateSummary() {
         const total = this.calculateYear1Total();
         const el = document.getElementById('personnel-total-y1');
@@ -136,13 +158,17 @@ class PersonnelManager {
     }
 
     calculateYear1Total() {
-        return this.state.reduce((sum, item) => {
+        const percent = parseFloat(window.inputApps.currentInputs.personnelWelfarePercent) || 0;
+        const multiplier = 1 + (percent / 100);
+
+        const totalBase = this.state.reduce((sum, item) => {
             const count = parseFloat(item.count) || 0;
             const salary = parseFloat(item.salary) || 0;
             const bonus = parseFloat(item.bonus) || 0;
             const annualPerHead = (salary * 12) + (salary * bonus);
             return sum + (annualPerHead * count);
         }, 0);
+        return totalBase * multiplier;
     }
 }
 

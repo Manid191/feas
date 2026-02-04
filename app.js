@@ -1,11 +1,24 @@
 document.addEventListener('DOMContentLoaded', () => {
 
+    // --- Check Version and Hard Reset if needed ---
+    const currentVersion = window.AppConfig?.appVersion || '1.0';
+    const storedVersion = localStorage.getItem('appVersion');
+
+    if (storedVersion !== currentVersion) {
+        console.warn(`Version Mismatch: Stored ${storedVersion} vs Current ${currentVersion}. Performing Hard Reset.`);
+        StorageManager.deleteAllSaves(); // Clear saved projects
+        localStorage.clear(); // Clear everything else
+        localStorage.setItem('appVersion', currentVersion);
+        window.location.reload(); // Force reload to apply clean state
+        return; // Stop execution
+    }
+
     // Flag to track if user has calculated
     window.hasCalculated = false;
 
-    // --- Clear any saved data to start fresh ---
-    // User requested: Do NOT remember inputs between sessions
-    StorageManager.deleteAllSaves();
+    // --- Clear any saved data to start fresh (User Preference) ---
+    // Double ensure nothing lingers if version match but user wants fresh start
+    // StorageManager.deleteAllSaves(); // Redundant if we rely on versioning, but safe.
 
     // Initial View with default values from config
     window.inputApps.renderInputs();
@@ -99,6 +112,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (window.detailedOpexApp) {
                     window.detailedOpexApp.render();
                 }
+            } else if (viewName === 'admin-cost') {
+                if (window.adminApp) {
+                    window.adminApp.render();
+                }
             } else if (viewName === 'dashboard') {
                 if (!window.hasCalculated) {
                     document.getElementById('content-area').innerHTML = `<div class="placeholder-state">
@@ -174,6 +191,7 @@ function updateHeader(viewName) {
         'inputs': { title: 'Parameters', sub: 'Configure technical and financial assumptions' },
         'personnel': { title: 'Personnel Plan', sub: 'Manage headcount and salary costs' },
         'detailed-opex': { title: 'Variable Costs', sub: 'Manage Detailed OPEX (Chemicals, Maintenance, etc.)' },
+        'admin-cost': { title: 'Admin Costs', sub: 'Manage Fixed Administrative Expenses (CSR, Insurance, Rent, etc.)' },
         'financials': { title: 'Financial Models', sub: 'Detailed cash flow and ratios' },
         'report': { title: 'Report', sub: 'Generate and export PDF reports' }
     };

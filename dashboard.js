@@ -102,17 +102,38 @@ class DashboardManager {
                         borderWidth: 2,
                         tension: 0.1,
                         fill: false,
+                        type: 'line',
+                        order: 1
+                    },
+                    {
+                        label: 'Fixed Cost',
+                        data: results.details.annualFixedCost,
+                        backgroundColor: 'rgba(255, 159, 64, 0.6)', // Orange
+                        borderColor: 'rgba(255, 159, 64, 1)',
+                        borderWidth: 1,
+                        type: 'bar',
+                        stack: 'costs',
                         order: 2
                     },
                     {
-                        label: 'Equity Cash Flow (Levered)',
-                        data: results.equityCashFlows,
-                        borderColor: 'rgb(16, 185, 129)', // Green
-                        backgroundColor: 'rgba(16, 185, 129, 0.1)',
-                        borderWidth: 2,
-                        tension: 0.1,
-                        fill: false,
-                        order: 3
+                        label: 'Variable Cost',
+                        data: results.details.annualVariableCost,
+                        backgroundColor: 'rgba(153, 102, 255, 0.6)', // Purple
+                        borderColor: 'rgba(153, 102, 255, 1)',
+                        borderWidth: 1,
+                        type: 'bar',
+                        stack: 'costs',
+                        order: 2
+                    },
+                    {
+                        label: 'Finance Cost',
+                        data: results.details.annualFinanceCost,
+                        backgroundColor: 'rgba(201, 203, 207, 0.6)', // Grey
+                        borderColor: 'rgba(201, 203, 207, 1)',
+                        borderWidth: 1,
+                        type: 'bar',
+                        stack: 'costs',
+                        order: 2
                     },
                     {
                         label: 'Cumulative Cash Flow',
@@ -120,10 +141,11 @@ class DashboardManager {
                         borderColor: 'rgb(255, 99, 132)', // Red
                         backgroundColor: 'rgba(255, 99, 132, 0.1)',
                         borderWidth: 2,
-                        borderDash: [5, 5], // Dashed line to distinguish
+                        borderDash: [5, 5],
                         tension: 0.1,
-                        fill: true,
-                        order: 1
+                        fill: false, // Changed to false to avoid overwhelming
+                        type: 'line',
+                        order: 0 // On Top
                     }
                 ]
             },

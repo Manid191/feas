@@ -3,8 +3,9 @@ class InputManager {
         this.container = document.getElementById('content-area');
 
         // Load Defaults from Config or fallback
-        const defaults = (window.AppConfig && window.AppConfig.defaults) ? window.AppConfig.defaults : {};
-        const initialOpex = (window.AppConfig && window.AppConfig.initialOpex) ? window.AppConfig.initialOpex : [];
+        const appConfig = window.AppConfig || {};
+        const defaults = appConfig.defaults || {};
+        const initialOpex = defaults.initialOpex || [];
 
         // Initialize with defaults to support calculation without rendering
         this.currentInputs = JSON.parse(JSON.stringify(defaults)); // Deep Copy
@@ -39,7 +40,11 @@ class InputManager {
                     
                     <div class="row">
                         <div class="form-group">
-                            <label>Capacity (MW)</label>
+                            <label>Production Cap (MW)</label>
+                            <input type="text" id="productionCapacity" value="${fmt(this.currentInputs.productionCapacity || this.currentInputs.capacity)}" onchange="inputApps.evaluateMathInput(this)">
+                        </div>
+                        <div class="form-group">
+                            <label>Sales Cap (MW)</label>
                             <input type="text" id="capacity" value="${fmt(this.currentInputs.capacity)}" onchange="inputApps.evaluateMathInput(this)">
                         </div>
                         <div class="form-group">
@@ -186,7 +191,7 @@ class InputManager {
             <!-- OPEX Section (Full row below) -->
             <div class="card glass-panel full-width" style="margin-top: 16px;">
                 <div class="card-header">
-                    <h3><i class="fa-solid fa-screwdriver-wrench"></i> OPEX (Operation Cost)</h3>
+                    <h3><i class="fa-solid fa-screwdriver-wrench"></i> Operation Cost (Fixed)</h3>
                     <button class="btn btn-primary btn-sm" onclick="inputApps.addOpexItem()">
                         <i class="fa-solid fa-plus"></i> Add Item
                     </button>
@@ -259,7 +264,8 @@ class InputManager {
                     
                     <select class="input-compact grow-1" onchange="inputApps.updateOpex(${index}, 'type', this.value)" title="Cost Type">
                         <option value="fixed" ${item.type === 'fixed' ? 'selected' : ''}>Fixed (THB)</option>
-                        <option value="per_mw" ${item.type === 'per_mw' ? 'selected' : ''}>THB / MW</option>
+                        <option value="per_mw_prod" ${(item.type === 'per_mw_prod' || item.type === 'per_mw') ? 'selected' : ''}>THB / MW (Prod)</option>
+                        <option value="per_mw_sales" ${item.type === 'per_mw_sales' ? 'selected' : ''}>THB / MW (Sales)</option>
                         <option value="percent_capex" ${item.type === 'percent_capex' ? 'selected' : ''}>% CAPEX</option>
                     </select>
 
@@ -407,6 +413,7 @@ class InputManager {
             const cachedPersonnel = this.currentInputs.personnel || [];
             const cachedDetailedOpex = this.currentInputs.detailedOpex || [];
             this.currentInputs = {
+                productionCapacity: getValue('productionCapacity') || getValue('capacity'),
                 capacity: getValue('capacity'),
                 projectYears: getValue('projectYears') || 25, // default if 0
                 powerFactor: getValue('powerFactor'),
@@ -424,11 +431,11 @@ class InputManager {
                 },
 
                 capex: {
-                    construction: getValue('costConstruction') * 1000000,
-                    machinery: getValue('costMachinery') * 1000000,
-                    land: getValue('costLand') * 1000000,
-                    sharePremium: getValue('costSharePremium') * 1000000,
-                    others: getValue('costOthers') * 1000000
+                    construction: getValue('costConstruction'),
+                    machinery: getValue('costMachinery'),
+                    land: getValue('costLand'),
+                    sharePremium: getValue('costSharePremium'),
+                    others: getValue('costOthers')
                 },
 
                 finance: {
@@ -441,13 +448,22 @@ class InputManager {
                 },
 
                 personnel: cachedPersonnel,
+                personnel: cachedPersonnel,
+                personnelWelfarePercent: getValue('personnelWelfarePercent') || 0,
                 detailedOpex: cachedDetailedOpex
             };
         }
 
-        // Return full object state
+        // Return full object state with applied multipliers for calculation
         return {
             ...this.currentInputs,
+            capex: {
+                construction: (this.currentInputs.capex.construction || 0) * 1000000,
+                machinery: (this.currentInputs.capex.machinery || 0) * 1000000,
+                land: (this.currentInputs.capex.land || 0) * 1000000,
+                sharePremium: (this.currentInputs.capex.sharePremium || 0) * 1000000,
+                others: (this.currentInputs.capex.others || 0) * 1000000
+            },
             opex: this.state.opexItems
         };
     }
@@ -467,7 +483,10 @@ class InputManager {
             revenue: { ...this.currentInputs.revenue, ...(inputs.revenue || {}) },
             capex: { ...this.currentInputs.capex, ...(inputs.capex || {}) },
             finance: { ...this.currentInputs.finance, ...(inputs.finance || {}) },
+
             personnel: inputs.personnel || this.currentInputs.personnel || [],
+            personnel: inputs.personnel || this.currentInputs.personnel || [],
+            personnelWelfarePercent: (inputs.personnelWelfarePercent !== undefined) ? inputs.personnelWelfarePercent : 0,
             detailedOpex: inputs.detailedOpex || this.currentInputs.detailedOpex || []
         };
 
@@ -479,6 +498,7 @@ class InputManager {
         // Sync DOM if exists
         const capEl = document.getElementById('capacity');
         if (capEl) {
+            if (inputs.productionCapacity) document.getElementById('productionCapacity').value = inputs.productionCapacity;
             if (inputs.capacity) document.getElementById('capacity').value = inputs.capacity;
             if (inputs.projectYears) document.getElementById('projectYears').value = inputs.projectYears;
             if (inputs.powerFactor) document.getElementById('powerFactor').value = inputs.powerFactor;
@@ -520,10 +540,9 @@ class InputManager {
         const inputs = customInputs || this.getInputs();
 
         // --- 1. Generate Parameters ---
-        const projectYears = inputs.projectYears || 25;
-        const discountRate = 0.07;
+        const projectYears = inputs.projectYears || window.AppConfig?.constants?.defaultProjectYears || 20;
+        const discountRate = window.AppConfig?.constants?.discountRate || 0.07;
 
-        // Finance Params
         // Finance Params
         const totalCapex = inputs.capex.construction + inputs.capex.machinery + inputs.capex.land + (inputs.capex.sharePremium || 0) + (inputs.capex.others || 0);
         const debtRatio = (inputs.finance.debtRatio || 0) / 100;
@@ -577,6 +596,9 @@ class InputManager {
         let annualTax = new Array(projectYears + 1).fill(0);
         let annualNetIncome = new Array(projectYears + 1).fill(0);
         let annualPrincipal = new Array(projectYears + 1).fill(0);
+        let annualFixedCost = new Array(projectYears + 1).fill(0);
+        let annualVariableCost = new Array(projectYears + 1).fill(0);
+        let annualFinanceCost = new Array(projectYears + 1).fill(0);
 
         // Itemized OPEX tracking: Array of objects { "Item Name": cost, ... }
         let annualItemizedOpex = new Array(projectYears + 1).fill(null);
@@ -594,10 +616,19 @@ class InputManager {
         // Loop
         let currentLoanBalance = loanAmount;
 
+        // Initialize Admin Costs
+        let adminCosts = [];
+        if (window.adminApp && typeof window.adminApp.getAnnualCosts === 'function') {
+            adminCosts = window.adminApp.getAnnualCosts();
+        }
+
         for (let year = 1; year <= projectYears; year++) {
             const escalationFactor = Math.pow(1 + revenueEscalation, year - 1);
             const inflationFactor = Math.pow(1 + opexInflation, year - 1);
             const degradationFactor = Math.pow(1 - degradationRate, year - 1);
+            const personnelMultiplier = 1 + ((inputs.personnelWelfarePercent || 0) / 100);
+
+
 
             const yearBaseRevenue = baseAnnualRevenue * escalationFactor * degradationFactor;
             const yearAdderRevenue = (year <= adderYears) ? (totalAnnualEnergy * degradationFactor * adderPrice) : 0;
@@ -606,6 +637,8 @@ class InputManager {
             annualRevenue[year] = yearRevenue;
 
             let yearOpex = 0;
+            let yearFixed = 0;
+            let yearVariable = 0;
             let yearItemized = {};
 
             inputs.opex.forEach(item => {
@@ -637,7 +670,8 @@ class InputManager {
                     const qty = parseFloat(item.quantity) || 1;
                     let baseCost = 0;
                     if (item.type === 'fixed') baseCost = item.value;
-                    else if (item.type === 'per_mw') baseCost = item.value * inputs.capacity;
+                    else if (item.type === 'per_mw_prod' || item.type === 'per_mw') baseCost = item.value * (inputs.productionCapacity || inputs.capacity);
+                    else if (item.type === 'per_mw_sales') baseCost = item.value * inputs.capacity;
                     else if (item.type === 'percent_capex') baseCost = (item.value / 100) * totalCapex;
                     else if (item.type === 'percent_machinery') baseCost = (item.value / 100) * (inputs.capex.machinery || 0);
                     else if (item.type === 'percent_const_mach') baseCost = (item.value / 100) * ((inputs.capex.construction || 0) + (inputs.capex.machinery || 0));
@@ -649,6 +683,7 @@ class InputManager {
                 }
 
                 yearOpex += cost;
+                yearFixed += cost; // Assuming parameter OPEX is Fixed
                 yearItemized[item.name] = (yearItemized[item.name] || 0) + cost;
             });
 
@@ -665,10 +700,11 @@ class InputManager {
                         const annualPerHead = (salary * 12) + (salary * bonus);
                         const growthFactor = Math.pow(1 + (increase / 100), year - 1);
 
-                        const totalJobCost = annualPerHead * count * growthFactor;
+                        const totalJobCost = annualPerHead * count * growthFactor * personnelMultiplier;
 
-                        yearOpex += totalJobCost;
                         totalPersonnel += totalJobCost;
+                        yearOpex += totalJobCost;
+                        yearFixed += totalJobCost; // Personnel is Fixed
                     }
                 });
                 if (totalPersonnel > 0) {
@@ -712,11 +748,22 @@ class InputManager {
                         const catName = item.category || 'Variable Expenses';
                         yearItemized[catName] = (yearItemized[catName] || 0) + annualCost;
                         yearOpex += annualCost;
+                        yearVariable += annualCost; // Detailed is Variable
                     }
                 });
             }
 
+            // --- Admin Costs (Fixed) ---
+            const adminCost = adminCosts[year] || 0;
+            if (adminCost > 0) {
+                yearItemized['Admin Expenses'] = (yearItemized['Admin Expenses'] || 0) + adminCost;
+                yearOpex += adminCost;
+                yearFixed += adminCost;
+            }
+
             annualOpex[year] = yearOpex;
+            annualFixedCost[year] = yearFixed;
+            annualVariableCost[year] = yearVariable;
             annualItemizedOpex[year] = yearItemized;
 
             // Financials
@@ -746,6 +793,7 @@ class InputManager {
             }
             annualInterest[year] = interestExp;
             annualPrincipal[year] = principalRepay;
+            annualFinanceCost[year] = interestExp + principalRepay;
 
             // Tax
             const ebt = ebit - interestExp;
@@ -821,7 +869,8 @@ class InputManager {
                 annualRevenue, annualOpex, annualItemizedOpex,
                 annualEbitda, annualDepreciation: annualDepreciationArr,
                 annualEbit, annualInterest, annualPrincipal, annualTax, annualNetIncome,
-                annualLoanBalance, annualDSCR
+                annualLoanBalance, annualDSCR,
+                annualFixedCost, annualVariableCost, annualFinanceCost
             }
         };
 
