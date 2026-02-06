@@ -4,7 +4,7 @@
  */
 window.AppConfig = {
     // Increment this to force a hard reset on client browsers
-    appVersion: '3.5',
+    appVersion: '4.4',
 
     // UI Strings & Labels
     ui: {

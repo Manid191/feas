@@ -21,7 +21,13 @@ document.addEventListener('DOMContentLoaded', () => {
     // StorageManager.deleteAllSaves(); // Redundant if we rely on versioning, but safe.
 
     // Initial View with default values from config
+    // Initial View with default values from config
     window.inputApps.renderInputs();
+
+    // Initialize Simulation Manager
+    if (typeof SimulationManager !== 'undefined') {
+        window.simulationApp = new SimulationManager();
+    }
 
     // Debounce Utility
     const debounce = (func, wait) => {
@@ -157,6 +163,16 @@ document.addEventListener('DOMContentLoaded', () => {
                         window.reportApp.render(inputs, results, sensitivity);
                     }
                 }
+            } else if (viewName === 'simulation') {
+                if (!window.hasCalculated) {
+                    document.getElementById('content-area').innerHTML = `<div class="placeholder-state">
+                        <i class="fa-solid fa-flask"></i>
+                        <h2>No Base Case Calculated</h2>
+                        <p>Please go to <strong>Parameters</strong> and click the <strong>Calculate</strong> button first to establish a Base Case.</p>
+                    </div>`;
+                } else if (window.simulationApp) {
+                    window.simulationApp.init();
+                }
             }
         });
     });
@@ -193,6 +209,7 @@ function updateHeader(viewName) {
         'detailed-opex': { title: 'Variable Costs', sub: 'Manage Detailed OPEX (Chemicals, Maintenance, etc.)' },
         'admin-cost': { title: 'Admin Costs', sub: 'Manage Fixed Administrative Expenses (CSR, Insurance, Rent, etc.)' },
         'financials': { title: 'Financial Models', sub: 'Detailed cash flow and ratios' },
+        'simulation': { title: 'Simulation Scenarios', sub: 'Model impacts of future changes (Price, Capacity, Costs)' },
         'report': { title: 'Report', sub: 'Generate and export PDF reports' }
     };
 

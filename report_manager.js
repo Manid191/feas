@@ -110,7 +110,7 @@ class ReportManager {
                         <div class="kpi-card">
                             <div class="kpi-content">
                                 <span>Payback</span>
-                                <h3>${results.payback.toFixed(1)} Years</h3>
+                                <h3>${results.payback.toFixed(2)} Years</h3>
                             </div>
                         </div>
                     </div>

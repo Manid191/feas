@@ -26,10 +26,11 @@ class InputManager {
         this.state = {
             opexItems: JSON.parse(JSON.stringify(initialOpex))
         };
+        this.lastResults = null;
     }
 
     renderInputs() {
-        const fmt = (v) => (Number(v) || 0).toLocaleString('en-US', { maximumFractionDigits: 4 });
+        const fmt = (v) => (Number(v) || 0).toLocaleString('en-US', { maximumFractionDigits: 2 });
 
         this.container.innerHTML = `
             <div class="three-column-layout">
@@ -273,7 +274,7 @@ class InputManager {
                            value="${(parseFloat(item.quantity) || 1).toLocaleString('en-US')}" onchange="inputApps.evaluateMathInput(this); inputApps.updateOpex(${index}, 'quantity', this.value)" title="Quantity">
 
                     <input type="text" class="input-compact grow-1" placeholder="Value (e.g. 50*12)" 
-                           value="${(parseFloat(item.value) || 0).toLocaleString('en-US', { maximumFractionDigits: 4 })}" onchange="inputApps.handleOpexValueChange(${index}, this)" title="Unit Price">
+                           value="${(parseFloat(item.value) || 0).toLocaleString('en-US', { maximumFractionDigits: 2 })}" onchange="inputApps.handleOpexValueChange(${index}, this)" title="Unit Price">
 
                     <div class="grow-1" style="display:flex; gap:4px; align-items:center;">
                         <select class="input-compact" style="flex:1; min-width:80px;" onchange="inputApps.updateOpex(${index}, 'freqType', this.value)" title="Frequency">
@@ -307,7 +308,7 @@ class InputManager {
                 const result = Function('"use strict";return (' + valueStr + ')')();
                 if (isFinite(result)) {
                     // Update UI with comma formatting
-                    inputElement.value = result.toLocaleString('en-US', { maximumFractionDigits: 4 });
+                    inputElement.value = result.toLocaleString('en-US', { maximumFractionDigits: 2 });
                     this.updateOpex(index, 'value', result); // Ensure state is updated with Number
                     return;
                 }
@@ -337,7 +338,7 @@ class InputManager {
                 const result = Function('"use strict";return (' + valueStr + ')')();
                 if (isFinite(result)) {
                     // Format with commas and optional decimals
-                    inputElement.value = result.toLocaleString('en-US', { maximumFractionDigits: 4 });
+                    inputElement.value = result.toLocaleString('en-US', { maximumFractionDigits: 2 });
                 }
             } catch (e) {
                 // Ignore invalid
@@ -536,7 +537,7 @@ class InputManager {
         }
     }
 
-    calculate(customInputs = null, isSimulation = false) {
+    calculate(customInputs = null, isSimulation = false, simulationEvents = []) {
         const inputs = customInputs || this.getInputs();
 
         // --- 1. Generate Parameters ---
@@ -564,21 +565,13 @@ class InputManager {
         const adderYears = inputs.revenue.adderYears || 0;
 
         // Depreciation (Straight Line)
-        // Land and Share Premium are NOT depreciable.
-        // Construction, Machinery, and Others ARE depreciable.
         const depreciableAsset = inputs.capex.construction + inputs.capex.machinery + (inputs.capex.others || 0);
         const annualDepreciation = depreciableAsset / projectYears;
 
-        // --- 2. Calculate Annual Revenue ---
-        const capacityKW = inputs.capacity * 1000;
-        const dailyEnergyPeak = capacityKW * (inputs.revenue.peakHours * inputs.powerFactor);
-        const dailyEnergyOffPeak = capacityKW * ((inputs.hoursPerDay - inputs.revenue.peakHours) * inputs.powerFactor);
+        // --- 2. Base Constants for Revenue ---
+        // We will recalculate actual revenue inside the loop to support dynamic changes
+        const baseCapacityKW = inputs.capacity * 1000;
         const days = inputs.daysPerYear || 365;
-        const totalAnnualEnergy = (dailyEnergyPeak + dailyEnergyOffPeak) * days;
-
-        const annualGenPeak = dailyEnergyPeak * days;
-        const annualGenOffPeak = dailyEnergyOffPeak * days;
-        const baseAnnualRevenue = (annualGenPeak * inputs.revenue.peakRate) + (annualGenOffPeak * inputs.revenue.offPeakRate);
 
         // --- 4. Generate Cash Flow Array ---
         let projectCashFlows = new Array(projectYears + 1).fill(0);
@@ -623,17 +616,69 @@ class InputManager {
         }
 
         for (let year = 1; year <= projectYears; year++) {
+
+            // --- Simulation Logic ---
+            let simPricePeak = inputs.revenue.peakRate;
+            let simPriceOffPeak = inputs.revenue.offPeakRate;
+            let simCapacity = inputs.capacity;
+            let simOpexPct = 0; // Cumulative % change
+            let simOpexAbs = 0; // Cumulative Absolute change
+
+            if (simulationEvents && simulationEvents.length > 0) {
+                simulationEvents.forEach(e => {
+                    const isActive = year >= e.startYear && year <= (e.endYear || projectYears);
+                    if (isActive) {
+                        const val = parseFloat(e.value) || 0;
+
+                        if (e.type === 'capacity') {
+                            if (e.mode === 'absolute') simCapacity = val;
+                            else if (e.mode === 'delta') simCapacity += val;
+                            else if (e.mode === 'percent') simCapacity *= (1 + (val / 100));
+                        }
+                        else if (e.type === 'price_peak') {
+                            if (e.mode === 'absolute') simPricePeak = val;
+                            else if (e.mode === 'delta') simPricePeak += val;
+                            else if (e.mode === 'percent') simPricePeak *= (1 + (val / 100));
+                        }
+                        else if (e.type === 'price_offpeak') {
+                            if (e.mode === 'absolute') simPriceOffPeak = val;
+                            else if (e.mode === 'delta') simPriceOffPeak += val;
+                            else if (e.mode === 'percent') simPriceOffPeak *= (1 + (val / 100));
+                        }
+                        else if (e.type === 'expense_opex') {
+                            if (e.mode === 'absolute') simOpexAbs += val;
+                            else if (e.mode === 'percent') simOpexPct += val;
+                        }
+                    }
+                });
+            }
+
+            // --- Recalculate Revenue with Simulation Params ---
             const escalationFactor = Math.pow(1 + revenueEscalation, year - 1);
             const inflationFactor = Math.pow(1 + opexInflation, year - 1);
             const degradationFactor = Math.pow(1 - degradationRate, year - 1);
             const personnelMultiplier = 1 + ((inputs.personnelWelfarePercent || 0) / 100);
 
+            // Energy Gen
+            const simCapKW = simCapacity * 1000;
+            const dailyGenPeak = simCapKW * (inputs.revenue.peakHours * inputs.powerFactor);
+            const dailyGenOffPeak = simCapKW * ((inputs.hoursPerDay - inputs.revenue.peakHours) * inputs.powerFactor);
+            const yearTotalEnergy = (dailyGenPeak + dailyGenOffPeak) * days;
 
+            // Base Revenue (Corrected for Degradation & Escalation)
+            // Note: Escalation applies to PRICE, Degradation applies to ENERGY
+            const yearPricePeak = simPricePeak * escalationFactor;
+            const yearPriceOffPeak = simPriceOffPeak * escalationFactor;
 
-            const yearBaseRevenue = baseAnnualRevenue * escalationFactor * degradationFactor;
-            const yearAdderRevenue = (year <= adderYears) ? (totalAnnualEnergy * degradationFactor * adderPrice) : 0;
+            const yearGenPeak = dailyGenPeak * days * degradationFactor;
+            const yearGenOffPeak = dailyGenOffPeak * days * degradationFactor;
 
+            const yearBaseRevenue = (yearGenPeak * yearPricePeak) + (yearGenOffPeak * yearPriceOffPeak);
+
+            // Adder Logic
+            const yearAdderRevenue = (year <= adderYears) ? (yearTotalEnergy * degradationFactor * adderPrice) : 0;
             const yearRevenue = yearBaseRevenue + yearAdderRevenue;
+
             annualRevenue[year] = yearRevenue;
 
             let yearOpex = 0;
@@ -761,6 +806,15 @@ class InputManager {
                 yearFixed += adminCost;
             }
 
+            // --- Apply Simulation OPEX Modifiers ---
+            if (simOpexPct !== 0 || simOpexAbs !== 0) {
+                const opexAdjustment = (yearOpex * (simOpexPct / 100)) + simOpexAbs;
+                yearOpex += opexAdjustment;
+                // Treat adjustment as variable for simplicity
+                yearVariable += opexAdjustment;
+                yearItemized['Simulation Adjustment'] = opexAdjustment;
+            }
+
             annualOpex[year] = yearOpex;
             annualFixedCost[year] = yearFixed;
             annualVariableCost[year] = yearVariable;
@@ -836,7 +890,7 @@ class InputManager {
             }
 
             costsArray[year] = yearOpex;
-            energyArray[year] = totalAnnualEnergy * Math.pow(1 - degradationRate, year - 1);
+            energyArray[year] = yearTotalEnergy * degradationFactor;
         }
 
         // --- 5. Metrics ---
@@ -875,6 +929,7 @@ class InputManager {
         };
 
         if (!isSimulation) {
+            this.lastResults = results; // Cache for simulation comparison
             if (window.dashboardApp) {
                 window.dashboardApp.render(results);
             } else {

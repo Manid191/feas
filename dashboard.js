@@ -58,7 +58,7 @@ class DashboardManager {
                         <div class="kpi-icon icon-payback"><i class="fa-solid fa-hourglass-half"></i></div>
                         <div class="kpi-content">
                             <span>Payback Period</span>
-                            <h3>${results.payback.toFixed(1)} Years</h3>
+                            <h3>${results.payback.toFixed(2)} Years</h3>
                         </div>
                     </div>
                 </div>
