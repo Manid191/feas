@@ -215,7 +215,11 @@ class SimulationManager {
         window.simulationApp = this; // Expose global
     }
 
-    renderResults(base, sim) {
+    renderResults(base, sim, viewMode = 'equity') {
+        this.lastBase = base;
+        this.lastSim = sim;
+        this.viewMode = viewMode;
+
         const resDiv = document.getElementById('simulation-results');
         if (!resDiv) return;
 
@@ -228,13 +232,36 @@ class SimulationManager {
             return 'color: #666;';
         };
 
-        const irrDiff = sim.irrEquity - base.irrEquity;
-        const npvDiff = sim.npvEquity - base.npvEquity;
+        // Metrics based on view mode
+        let baseIRR, simIRR, baseNPV, simNPV;
+        if (viewMode === 'project') {
+            baseIRR = base.irr;
+            simIRR = sim.irr;
+            baseNPV = base.npv;
+            simNPV = sim.npv;
+        } else {
+            baseIRR = base.irrEquity;
+            simIRR = sim.irrEquity;
+            baseNPV = base.npvEquity;
+            simNPV = sim.npvEquity;
+        }
+
+        const irrDiff = simIRR - baseIRR;
+        const npvDiff = simNPV - baseNPV;
 
         let html = `
         <div class="card full-width">
-            <div class="card-header">
+            <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
                 <h3><i class="fa-solid fa-chart-line"></i> Simulation Results Comparison</h3>
+                
+                <!-- View Toggle -->
+                <div class="view-toggle">
+                    <input type="radio" name="simViewMode" id="viewEquity" autocomplete="off" ${viewMode === 'equity' ? 'checked' : ''} onchange="simulationApp.switchView('equity')">
+                    <label for="viewEquity"><i class="fa-solid fa-chart-pie"></i> Equity View</label>
+
+                    <input type="radio" name="simViewMode" id="viewProject" autocomplete="off" ${viewMode === 'project' ? 'checked' : ''} onchange="simulationApp.switchView('project')">
+                    <label for="viewProject"><i class="fa-solid fa-industry"></i> Project View</label>
+                </div>
             </div>
             
             <div class="comparison-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; padding: 10px;">
@@ -243,7 +270,7 @@ class SimulationManager {
                     <table class="result-table" style="width: 100%;">
                         <thead>
                             <tr>
-                                <th>Metric</th>
+                                <th>Metric (${viewMode === 'project' ? 'Project' : 'Equity'})</th>
                                 <th style="text-align: center;">Base</th>
                                 <th style="text-align: center;">Sim</th>
                                 <th style="text-align: center;">Diff</th>
@@ -251,22 +278,16 @@ class SimulationManager {
                         </thead>
                         <tbody>
                             <tr>
-                                <td><strong>Project IRR</strong></td>
-                                <td style="text-align: center;">${fmtP(base.irr)}</td>
-                                <td style="text-align: center;">${fmtP(sim.irr)}</td>
-                                <td style="text-align: center; ${diffColor(sim.irr - base.irr)}">${fmtP(sim.irr - base.irr)}</td>
+                                <td><strong>IRR (%)</strong></td>
+                                <td style="text-align: center;">${fmtP(baseIRR)}</td>
+                                <td style="text-align: center;"><b>${fmtP(simIRR)}</b></td>
+                                <td style="text-align: center; ${diffColor(irrDiff)}"><b>${irrDiff > 0 ? '+' : ''}${fmtP(irrDiff)}</b></td>
                             </tr>
                             <tr>
-                                <td><strong>Equity IRR</strong></td>
-                                <td style="text-align: center;">${fmtP(base.irrEquity)}</td>
-                                <td style="text-align: center;"><b>${fmtP(sim.irrEquity)}</b></td>
-                                <td style="text-align: center; ${diffColor(irrDiff)}"><b>${fmtP(irrDiff)}</b></td>
-                            </tr>
-                            <tr>
-                                <td><strong>NPV (Equity)</strong></td>
-                                <td style="text-align: center;">${fmtM(base.npvEquity)}</td>
-                                <td style="text-align: center;">${fmtM(sim.npvEquity)}</td>
-                                <td style="text-align: center; ${diffColor(npvDiff)}">${fmtM(npvDiff)}</td>
+                                <td><strong>NPV (THB)</strong></td>
+                                <td style="text-align: center;">${fmtM(baseNPV)}</td>
+                                <td style="text-align: center;">${fmtM(simNPV)}</td>
+                                <td style="text-align: center; ${diffColor(npvDiff)}">${npvDiff > 0 ? '+' : ''}${fmtM(npvDiff)}</td>
                             </tr>
                             <tr>
                                 <td><strong>Payback</strong></td>
@@ -351,7 +372,16 @@ class SimulationManager {
         this.renderComparisonCharts(base, sim);
     }
 
+    switchView(mode) {
+        if (this.lastBase && this.lastSim) {
+            this.renderResults(this.lastBase, this.lastSim, mode);
+        }
+    }
+
     renderComparisonCharts(base, sim) {
+        const isProject = this.viewMode === 'project';
+        const labelSuffix = isProject ? ' (Project)' : ' (Equity)';
+
         const commonOptions = {
             responsive: true,
             maintainAspectRatio: false,
@@ -384,23 +414,19 @@ class SimulationManager {
         // 1. IRR Bar Chart
         const irrCtx = document.getElementById('simIrrChart');
         if (irrCtx) {
+            const baseIRR = isProject ? base.irr : base.irrEquity;
+            const simIRR = isProject ? sim.irr : sim.irrEquity;
+
             new Chart(irrCtx, {
                 type: 'bar',
                 data: {
-                    labels: ['Project IRR (%)', 'Equity IRR (%)'],
+                    labels: ['Base Case' + labelSuffix, 'Simulation' + labelSuffix],
                     datasets: [
                         {
-                            label: 'Base Case',
-                            data: [base.irr, base.irrEquity],
-                            backgroundColor: 'rgba(54, 162, 235, 0.7)',
-                            borderColor: 'rgba(54, 162, 235, 1)',
-                            borderWidth: 1
-                        },
-                        {
-                            label: 'Simulation',
-                            data: [sim.irr, sim.irrEquity],
-                            backgroundColor: 'rgba(255, 99, 132, 0.7)',
-                            borderColor: 'rgba(255, 99, 132, 1)',
+                            label: 'IRR %',
+                            data: [baseIRR, simIRR],
+                            backgroundColor: ['rgba(54, 162, 235, 0.7)', 'rgba(255, 99, 132, 0.7)'],
+                            borderColor: ['rgba(54, 162, 235, 1)', 'rgba(255, 99, 132, 1)'],
                             borderWidth: 1
                         }
                     ]
@@ -409,8 +435,8 @@ class SimulationManager {
                     responsive: true,
                     maintainAspectRatio: false,
                     plugins: {
-                        legend: { position: 'top' },
-                        title: { display: true, text: 'IRR Comparison' }
+                        legend: { display: false }, // Single dataset, legend redundant
+                        title: { display: true, text: 'IRR Comparison' + labelSuffix }
                     },
                     scales: {
                         y: { beginAtZero: true, title: { display: true, text: '%' } }
@@ -419,12 +445,15 @@ class SimulationManager {
             });
         }
 
-        // 2. Annual Cash Flow Line Chart (Equity CF is more relevant for Loan checking)
+        // 2. Annual Cash Flow Line Chart
         const cfCtx = document.getElementById('simCashFlowChart');
-        if (cfCtx && base.equityCashFlows && sim.equityCashFlows) {
-            const years = base.equityCashFlows.map((_, i) => `Y${i}`);
-            const baseCF = base.equityCashFlows.map(v => v / 1000000);
-            const simCF = sim.equityCashFlows.map(v => v / 1000000);
+        const baseCFSrc = isProject ? base.cashFlows : base.equityCashFlows;
+        const simCFSrc = isProject ? sim.cashFlows : sim.equityCashFlows;
+
+        if (cfCtx && baseCFSrc && simCFSrc) {
+            const years = baseCFSrc.map((_, i) => `Y${i}`);
+            const baseCF = baseCFSrc.map(v => v / 1000000);
+            const simCF = simCFSrc.map(v => v / 1000000);
 
             new Chart(cfCtx, {
                 type: 'line',
@@ -432,7 +461,7 @@ class SimulationManager {
                     labels: years,
                     datasets: [
                         {
-                            label: 'Base Equity',
+                            label: 'Base' + labelSuffix,
                             data: baseCF,
                             borderColor: 'rgba(54, 162, 235, 1)',
                             backgroundColor: 'rgba(54, 162, 235, 0.1)',
@@ -440,7 +469,7 @@ class SimulationManager {
                             tension: 0.3
                         },
                         {
-                            label: 'Sim Equity',
+                            label: 'Sim' + labelSuffix,
                             data: simCF,
                             borderColor: 'rgba(255, 99, 132, 1)',
                             backgroundColor: 'rgba(255, 99, 132, 0.1)',
@@ -453,12 +482,15 @@ class SimulationManager {
             });
         }
 
-        // 3. Cumulative Cash Flow Line Chart (Equity)
+        // 3. Cumulative Cash Flow Line Chart
         const cumCtx = document.getElementById('simCumCashFlowChart');
-        if (cumCtx && base.cumulativeEquityCashFlows && sim.cumulativeEquityCashFlows) {
-            const years = base.cumulativeEquityCashFlows.map((_, i) => `Y${i}`);
-            const baseCumStr = base.cumulativeEquityCashFlows.map(v => v / 1000000);
-            const simCumStr = sim.cumulativeEquityCashFlows.map(v => v / 1000000);
+        const baseCumSrc = isProject ? base.cumulativeCashFlows : base.cumulativeEquityCashFlows;
+        const simCumSrc = isProject ? sim.cumulativeCashFlows : sim.cumulativeEquityCashFlows;
+
+        if (cumCtx && baseCumSrc && simCumSrc) {
+            const years = baseCumSrc.map((_, i) => `Y${i}`);
+            const baseCumStr = baseCumSrc.map(v => v / 1000000);
+            const simCumStr = simCumSrc.map(v => v / 1000000);
 
             new Chart(cumCtx, {
                 type: 'line',
@@ -466,7 +498,7 @@ class SimulationManager {
                     labels: years,
                     datasets: [
                         {
-                            label: 'Base Cumulative (Equity)',
+                            label: 'Base Cumulative' + labelSuffix,
                             data: baseCumStr,
                             borderColor: 'rgba(54, 162, 235, 1)',
                             borderDash: [5, 5],
@@ -474,7 +506,7 @@ class SimulationManager {
                             tension: 0.3
                         },
                         {
-                            label: 'Sim Cumulative (Equity)',
+                            label: 'Sim Cumulative' + labelSuffix,
                             data: simCumStr,
                             borderColor: 'rgba(255, 99, 132, 1)',
                             borderDash: [5, 5],
@@ -487,13 +519,19 @@ class SimulationManager {
             });
         }
 
-        // 4. Net Profit Line Chart (Restored)
+        // 4. Profit Chart (Net Income for Equity, EBITDA for Project)
         const npCtx = document.getElementById('simNetProfitChart');
         if (npCtx && base.details && sim.details) {
             const years = base.cashFlows.map((_, i) => `Y${i}`);
             const labels = years.slice(1);
-            const baseNP = base.details.annualNetIncome.slice(1).map(v => v / 1000000);
-            const simNP = sim.details.annualNetIncome.slice(1).map(v => v / 1000000);
+
+            // Choose Metric: Net Income (Equity) vs EBITDA (Project)
+            const metricName = isProject ? 'EBITDA' : 'Net Income';
+            const baseSrc = isProject ? base.details.annualEbitda : base.details.annualNetIncome;
+            const simSrc = isProject ? sim.details.annualEbitda : sim.details.annualNetIncome;
+
+            const baseNP = baseSrc.slice(1).map(v => v / 1000000);
+            const simNP = simSrc.slice(1).map(v => v / 1000000);
 
             new Chart(npCtx, {
                 type: 'line',
@@ -501,7 +539,7 @@ class SimulationManager {
                     labels: labels,
                     datasets: [
                         {
-                            label: 'Base Net Profit',
+                            label: `Base ${metricName}`,
                             data: baseNP,
                             borderColor: 'rgba(75, 192, 192, 1)',
                             backgroundColor: 'rgba(75, 192, 192, 0.1)',
@@ -509,7 +547,7 @@ class SimulationManager {
                             tension: 0.3
                         },
                         {
-                            label: 'Sim Net Profit',
+                            label: `Sim ${metricName}`,
                             data: simNP,
                             borderColor: 'rgba(153, 102, 255, 1)',
                             backgroundColor: 'rgba(153, 102, 255, 0.1)',

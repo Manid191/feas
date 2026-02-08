@@ -771,6 +771,7 @@ class InputManager {
             let simCapacity = inputs.capacity;
             let simOpexPct = 0; // Cumulative % change
             let simOpexAbs = 0; // Cumulative Absolute change
+            let yearLoanProceeds = 0; // Track loan inflows separately
 
             if (simulationEvents && simulationEvents.length > 0) {
                 simulationEvents.forEach(e => {
@@ -791,7 +792,7 @@ class InputManager {
                             });
 
                             // Cash Inflow from borrowing
-                            equityCashFlows[year] += amt;
+                            yearLoanProceeds += amt;
                         }
                     }
 
@@ -975,7 +976,7 @@ class InputManager {
                     }
 
                     let freqMultiplier = 1;
-                    if (fType === 'daily') freqMultiplier = (inputs.daysPerYear || 334);
+                    if (fType === 'daily') freqMultiplier = days;
                     else if (fType === 'monthly') freqMultiplier = 12;
 
                     const annualCost = qty * price * freqMultiplier * inflationFactor;
@@ -1067,10 +1068,10 @@ class InputManager {
             projectCashFlows[year] = projectCF;
 
             const equityCF = netIncome + annualDepreciation - principalRepay;
-            equityCashFlows[year] = equityCF;
+            equityCashFlows[year] = equityCF + yearLoanProceeds;
 
             costsArray[year] = yearOpex + annualDepreciation + interestExp;
-            energyArray[year] = yearTotalEnergy * degradationFactor;
+            energyArray[year] = yearTotalEnergy;
 
             // Update Loan Balance
             if (year <= loanTerm) {

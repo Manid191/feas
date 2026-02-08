@@ -541,28 +541,34 @@ select:focus {
 /* Project Selection Modal */
 .modal-overlay {
     position: fixed;
-    top: 0; left: 0; width: 100%; height: 100%;
-    background: rgba(0,0,0,0.5);
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
     backdrop-filter: blur(5px);
     z-index: 1000;
     display: flex;
     justify-content: center;
     align-items: center;
 }
+
 .modal-content {
     background: white;
     padding: 40px;
     border-radius: 20px;
     max-width: 800px;
     width: 90%;
-    box-shadow: 0 20px 50px rgba(0,0,0,0.2);
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.2);
 }
+
 .project-type-grid {
     display: flex;
     gap: 20px;
     justify-content: center;
     flex-wrap: wrap;
 }
+
 .project-card {
     background: white;
     border: 2px solid #eee;
@@ -573,22 +579,39 @@ select:focus {
     cursor: pointer;
     transition: all 0.2s;
 }
+
 .project-card:hover {
     border-color: var(--primary-color);
     transform: translateY(-5px);
     box-shadow: 0 10px 30px rgba(37, 99, 235, 0.1);
 }
+
 .project-card .icon {
     font-size: 40px;
     color: var(--primary-color);
     margin-bottom: 15px;
 }
-.project-card h3 { margin: 0 0 5px 0; color: #333; }
-.project-card p { margin: 0; color: #888; font-size: 0.9em; }
+
+.project-card h3 {
+    margin: 0 0 5px 0;
+    color: #333;
+}
+
+.project-card p {
+    margin: 0;
+    color: #888;
+    font-size: 0.9em;
+}
 
 @media (max-width: 768px) {
-    .project-type-grid { flex-direction: column; align-items: center; }
-    .project-card { width: 100%; }
+    .project-type-grid {
+        flex-direction: column;
+        align-items: center;
+    }
+
+    .project-card {
+        width: 100%;
+    }
 }
 
 /* --- New Compact OPEX Styles --- */
@@ -666,4 +689,48 @@ select:focus {
 .grow-2 {
     flex: 2;
     min-width: 0;
+}
+
+/* --- View Toggle (Segmented Control) --- */
+.view-toggle {
+    display: inline-flex;
+    background: #f3f2f1;
+    border: 1px solid #e1dfdd;
+    border-radius: 4px;
+    padding: 3px;
+    gap: 0;
+}
+
+.view-toggle input[type="radio"] {
+    display: none;
+    /* Hide default radio */
+}
+
+.view-toggle label {
+    padding: 5px 12px;
+    cursor: pointer;
+    border-radius: 3px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--k-text-light);
+    margin: 0;
+    transition: all 0.2s;
+    text-transform: none;
+    /* Reset */
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    border: 1px solid transparent;
+}
+
+.view-toggle label:hover {
+    color: var(--k-primary);
+    background: rgba(255, 255, 255, 0.5);
+}
+
+.view-toggle input[type="radio"]:checked+label {
+    background: white;
+    color: var(--k-primary);
+    border-color: #e1dfdd;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 }
